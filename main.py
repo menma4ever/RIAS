@@ -5,8 +5,7 @@ import random
 import logging
 import time
 from collections import defaultdict
-from keep_alive import keep_alive  # Import the keep_alive function
-
+from keep_alive import keep_alive
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 
@@ -54,7 +53,8 @@ def send_welcome(message):
     bot.send_animation(message.chat.id, GIF_FILE_ID)
     bot.send_message(message.chat.id, random.choice(rias_responses))
 
-@bot.message_handler(func=lambda message: True)
+@bot.message_handler(func=lambda message: message.reply_to_message is not None or 
+                                    (message.entities is not None and any(entity.type == 'mention' for entity in message.entities)))
 def ai_response(message):
     user_id = message.chat.id
     
@@ -99,10 +99,7 @@ def ai_response(message):
     except Exception as e:
         logging.error(f"Error while generating AI response: {e}")
         bot.reply_to(message, "Sorry, I couldn't process your request at the moment.")
-
-# Call keep_alive to prevent the bot from timing out (if using a platform that requires it)
 keep_alive()
-
 # Start polling with increased timeout and error handling
 while True:
     try:
