@@ -45,8 +45,8 @@ rias_responses = [
     "Shall we continue this adventure together?"
 ]
 
-# Dictionary to store chat history with memory for each user
-chat_memory = defaultdict(lambda: deque(maxlen=10))  # Stores up to 10 messages per user
+# Dictionary to store chat history per **individual user**
+chat_memory = defaultdict(lambda: deque(maxlen=10))  # Each user gets up to 10 past messages stored
 
 # Message limits
 MAX_MESSAGES = 5
@@ -86,14 +86,15 @@ def send_welcome(message):
     message.entities is not None and any(entity.type == 'mention' and message.text[entity.offset:entity.offset + entity.length] == f"@{bot.get_me().username}" for entity in message.entities)
 ))
 def ai_response(message):
-    user_id = message.chat.id
+    user_id = message.from_user.id  # Use user ID to keep separate histories for each person
+
     chat_memory[user_id].append({"role": "user", "content": message.text})
     
-    history_to_send = list(chat_memory[user_id])[-MAX_MESSAGES:]  # Keep memory for 5 messages
+    history_to_send = list(chat_memory[user_id])[-MAX_MESSAGES:]  # Keep memory for 5 messages per user
     history_to_send = [truncate_message(msg) for msg in history_to_send]
 
     messages_to_send = [
-        {"role": "system", "content": "You are Rias Gremory, a noble and powerful demon from High School DxD. You are knowledgeable, confident, and protective of those you care about. Try to keep responses short (20-30 words), and reply in Uzbek if possible."},
+        {"role": "system", "content": "You are Rias Gremory, a noble and powerful demon from High School DxD. You are knowledgeable, confident, and protective of those you care about. Try to keep responses short (20-30 words), if massage in uzebk the reply in uzbek too else: whatever you want language"},
         *history_to_send
     ]
 
