@@ -11,9 +11,13 @@ from keep_alive import keep_alive
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 
-# Replace with your actual bot token and API key
+# Retrieve API tokens securely from environment variables
 BOT_API_TOKEN = "7597925320:AAFbznwkH2X8RqRoCgPyrsRThS3GAMtm488"
 NEW_API_KEY = "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"
+
+if not BOT_API_TOKEN or not NEW_API_KEY:
+    logging.error("Missing API keys. Please set BOT_API_TOKEN and NEW_API_KEY in environment variables.")
+    exit(1)
 
 # GIFs list for auto-sending
 GIF_FILES = [
