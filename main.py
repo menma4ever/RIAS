@@ -4,25 +4,37 @@ from groq import Groq
 import random
 import logging
 import time
-from collections import defaultdict
+import threading
+from collections import defaultdict, deque
 from keep_alive import keep_alive
+
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 
-# Retrieve bot token and API key from environment variables (replace with your own environment variable handling mechanism)
-BOT_API_TOKEN = os.getenv("BOT_API_TOKEN", "7597925320:AAFbznwkH2X8RqRoCgPyrsRThS3GAMtm488")  # Replace with your token securely
-NEW_API_KEY = os.getenv("NEW_API_KEY", "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")  # Replace with your API key securely
+# Replace with your actual bot token and API key
+BOT_API_TOKEN = "7597925320:AAFbznwkH2X8RqRoCgPyrsRThS3GAMtm488"
+NEW_API_KEY = "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"
 
-# GIF to be sent
+# GIFs list for auto-sending
+GIF_FILES = [
+    'https://t.me/franxxbotsgarage/20',
+    'https://t.me/franxxbotsgarage/21',
+    'https://t.me/franxxbotsgarage/22',
+    'https://t.me/franxxbotsgarage/23',
+    'https://t.me/franxxbotsgarage/24'
+]
+
+# Main GIF for /startrias command
 GIF_FILE_ID = 'https://t.me/franxxbotsgarage/19'
+
+# Group chat ID for sending random GIFs
+GROUP_CHAT_ID = -1002262322366  
 
 # Initialize the bot
 bot = telebot.TeleBot(BOT_API_TOKEN)
 
-# Set up the new AI API
-client = Groq(
-    api_key=NEW_API_KEY  # Use your Groq API key directly
-)
+# Set up the AI API
+client = Groq(api_key=NEW_API_KEY)
 
 # Define Rias Gremory's random responses
 rias_responses = [
@@ -33,77 +45,80 @@ rias_responses = [
     "Shall we continue this adventure together?"
 ]
 
-# Initialize a dictionary to store chat history
-chat_history = defaultdict(list)
+# Dictionary to store chat history with memory for each user
+chat_memory = defaultdict(lambda: deque(maxlen=10))  # Stores up to 10 messages per user
 
-# Maximum number of previous messages to send (to avoid going over the limit)
+# Message limits
 MAX_MESSAGES = 5
-MAX_CHARACTER_LIMIT = 256  # Free-tier character limit
+MAX_CHARACTER_LIMIT = 512  # Increased to allow memory retention
 
-# Function to truncate message content to avoid exceeding character limits
-def truncate_message(message, max_length=100):
-    """Truncate message content to a specific length if it's too long."""
+# Function to truncate long messages
+def truncate_message(message, max_length=200):
     if len(message['content']) > max_length:
-        message['content'] = message['content'][:max_length] + "..."  # Add ellipsis to indicate truncation
+        message['content'] = message['content'][:max_length] + "..."
     return message
 
-# Handlers
+# Function to send GIFs randomly every 30-90 minutes
+def send_random_gif():
+    while True:
+        random_gif = random.choice(GIF_FILES)
+        try:
+            bot.send_animation(GROUP_CHAT_ID, random_gif)
+            logging.info(f"Sent random GIF: {random_gif}")
+        except Exception as e:
+            logging.error(f"Error sending random GIF: {e}")
+        
+        # Wait for a random time between 30 to 90 minutes
+        time.sleep(random.randint(1800, 5400))  
+
+# Start the GIF sender in a separate thread
+threading.Thread(target=send_random_gif, daemon=True).start()
+
+# Command handlers
 @bot.message_handler(commands=['startrias', 'startgame'])
 def send_welcome(message):
     bot.send_animation(message.chat.id, GIF_FILE_ID)
     bot.send_message(message.chat.id, random.choice(rias_responses))
 
-@bot.message_handler(func=lambda message: message.reply_to_message is not None or 
-                                    (message.entities is not None and any(entity.type == 'mention' for entity in message.entities)))
+@bot.message_handler(func=lambda message: (
+    message.reply_to_message is not None and message.reply_to_message.from_user.id == bot.get_me().id
+) or (
+    message.entities is not None and any(entity.type == 'mention' and message.text[entity.offset:entity.offset + entity.length] == f"@{bot.get_me().username}" for entity in message.entities)
+))
 def ai_response(message):
     user_id = message.chat.id
+    chat_memory[user_id].append({"role": "user", "content": message.text})
     
-    # Add user's message to the chat history
-    chat_history[user_id].append({"role": "user", "content": message.text})
-    
-    # Limit the number of messages in the history to avoid exceeding the API's limits
-    history_to_send = chat_history[user_id][-MAX_MESSAGES:]
-
-    # Truncate messages to ensure we stay within the character limit
+    history_to_send = list(chat_memory[user_id])[-MAX_MESSAGES:]  # Keep memory for 5 messages
     history_to_send = [truncate_message(msg) for msg in history_to_send]
 
-    # Prepare the full list of messages to send to the API
     messages_to_send = [
-        {
-            "role": "system",
-            "content": "You are Rias Gremory, a noble and powerful demon from High School DxD. You are knowledgeable, confident, and protective of those you care about. try to give shorter responses around 20-30 words"
-        },
-        *history_to_send  # Add the most recent messages
+        {"role": "system", "content": "You are Rias Gremory, a noble and powerful demon from High School DxD. You are knowledgeable, confident, and protective of those you care about. Try to keep responses short (20-30 words), and reply in Uzbek if possible."},
+        *history_to_send
     ]
 
-    # Ensure the total character count does not exceed the limit
     total_characters = sum(len(msg['content']) for msg in messages_to_send)
-    
     while total_characters > MAX_CHARACTER_LIMIT:
-        # Trim the oldest messages until we are under the character limit
-        messages_to_send.pop(1)  # Remove the oldest message
+        messages_to_send.pop(1)
         total_characters = sum(len(msg['content']) for msg in messages_to_send)
 
     try:
-        # Groq API request for chat completion
         response = client.chat.completions.create(
-            messages=messages_to_send,  # Messages to send to the model
-            model="llama-3.3-70b-versatile",  # The model you're using
+            messages=messages_to_send,
+            model="llama-3.3-70b-versatile"
         )
 
-        # Add AI's response to the chat history
-        chat_history[user_id].append({"role": "assistant", "content": response.choices[0].message.content})
-        
-        # Send the AI response to the user
+        chat_memory[user_id].append({"role": "assistant", "content": response.choices[0].message.content})
         bot.reply_to(message, response.choices[0].message.content)
     except Exception as e:
         logging.error(f"Error while generating AI response: {e}")
         bot.reply_to(message, "Sorry, I couldn't process your request at the moment.")
 keep_alive()
-# Start polling with increased timeout and error handling
+
+# Start polling with error handling
 while True:
     try:
         bot.polling(none_stop=True, interval=0, timeout=60)
     except Exception as e:
         logging.error(f"Polling error: {e}")
-        time.sleep(15)  # Wait before retrying
+        time.sleep(15)  # Retry after a delay
