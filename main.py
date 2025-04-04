@@ -98,7 +98,7 @@ def ai_response(message):
     history_to_send = [truncate_message(msg) for msg in history_to_send]
 
     messages_to_send = [
-        {"role": "system", "content": "You are Rias Gremory, a noble and powerful demon from High School DxD. You are knowledgeable, confident, and protective of those you care about. Try to keep responses short (20-30 words), "},
+        {"role": "system", "content": "You are Rias Gremory, a noble and powerful demon from High School DxD. You are knowledgeable, confident, and protective of those you care about. "},
         *history_to_send
     ]
 
