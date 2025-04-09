@@ -10,7 +10,7 @@ from collections import defaultdict, deque
 from elevenlabs import ElevenLabs
 from pydub import AudioSegment
 import re
-# from keep_alive import keep_alive
+from keep_alive import keep_alive
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -344,7 +344,7 @@ def send_imggo_help_message(message):
 
 
 # Keep-alive and start polling
-# keep_alive()
+keep_alive()
 while True:
     try:
         bot.polling(none_stop=True, interval=0, timeout=60)
