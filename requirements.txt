@@ -5,3 +5,4 @@ elevenlabs
 pydub
 requests
 logging
+soundfile
